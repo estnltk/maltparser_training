@@ -14,7 +14,7 @@
 #
 from __future__ import unicode_literals, print_function
 
-import re, json
+import re
 import os, os.path
 import codecs, sys
 import argparse
@@ -29,11 +29,12 @@ from estnltk.core import PACKAGE_PATH, as_unicode
 
 from estnltk.syntax.parsers import MaltParser
 from estnltk.syntax.maltparser_support import CONLLFeatGenerator
-from estnltk.syntax.maltparser_support import convert_text_w_syntax_to_CONLL
+#from estnltk.syntax.maltparser_support import convert_text_w_syntax_to_CONLL
 from estnltk.syntax.utils import read_text_from_cg3_file
 
 from adhoc_fixes import repair_cycles
 from feature_generators import add_feature_generator_arguments_to_argparser
+from feature_generators import convert_text_w_syntax_to_CONLL
 from feature_generators import get_feature_generator
 
 # Whether aligned sentences will be checked for identity
@@ -116,7 +117,7 @@ add_feature_generator_arguments_to_argparser( arg_parser )
 args = arg_parser.parse_args()
 in_files = [ f for f in args.in_files if os.path.isfile(f) and re.match('.+(\.conllu?)$', f) ]
 OUT_FILE_NAME = args.out_file
-feat_generator = get_feature_generator( args, verbose=True )
+feat_generator, split_unit = get_feature_generator( args, verbose=True )
 
 aligned_sentences  = 0
 aligned_tokens     = 0
@@ -226,7 +227,7 @@ if os.path.isdir( args.in_dir ) and in_files:
                     edt_sent_text.tag_analysis()
                     ud_sent = [ '', edt_sent_text.word_texts ]
                     repair_cycles( edt_sent_text, ud_sent, layer=LAYER_VISLCG3 )
-                    conll_str = convert_text_w_syntax_to_CONLL( edt_sent_text, feat_generator, layer=LAYER_VISLCG3 )
+                    conll_str = convert_text_w_syntax_to_CONLL( edt_sent_text, feat_generator, granularity=split_unit, layer=LAYER_VISLCG3 )
                     # Write results into the file
                     o_f = codecs.open( out_file_name, mode='a', encoding='utf-8' )
                     o_f.write(conll_str)

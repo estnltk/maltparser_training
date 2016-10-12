@@ -10,11 +10,9 @@ from estnltk.syntax.maltparser_support import _loadKSubcatRelations, _findKsubca
 from estnltk.syntax.parsers import MaltParser
 from estnltk.syntax.maltparser_support import CONLLFeatGenerator as EstNLTKCONLLFeatGenerator
 
-import re, json
+import re
 import os, os.path
 import codecs
-import tempfile
-import subprocess
 
 # =============================================================================
 # =============================================================================
@@ -227,20 +225,29 @@ class CONLLFeatGenerator(object):
 feature_generators = [
 { 'flag':'--f01',  \
   'generator': MaltParser.load_default_feature_generator(), \
-  'help': 'EstNLTK\'s feature generator (Default).'
+  'help': 'EstNLTK\'s feature generator (Default).',\
+  'splitBy': 'sentences'
 },\
 { 'flag':'--f02', \
   'generator': CONLLFeatGenerator(), \
-  'help': 'The feature generator with default settings.'
+  'help': 'The feature generator with settings: split_by=sentences;',\
+  'splitBy': 'sentences'
 },\
 { 'flag':'--f03', \
   'generator': CONLLFeatGenerator(addAmbiguousPos=True,addVerbcGramm=True), \
-  'help': 'The feature generator with settings: addAmbiguousPos=True, addVerbcGramm=True;'
+  'help': 'The feature generator with settings: split_by=sentences, addAmbiguousPos=True, addVerbcGramm=True;',\
+  'splitBy': 'sentences'
 },\
 { 'flag':'--f04', \
   'generator': CONLLFeatGenerator(addAmbiguousPos=True,addVerbcGramm=True,addNomAdvVinf=True,addClauseBound=True,addSeSayingVerbs=True), \
-  'help': 'The feature generator with settings: addAmbiguousPos=True, addVerbcGramm=True, addNomAdvVinf=True, addClauseBound=True, addSeSayingVerbs=True;'
-}
+  'help': 'The feature generator with settings: split_by=sentences, addAmbiguousPos=True, addVerbcGramm=True, addNomAdvVinf=True, addClauseBound=True, addSeSayingVerbs=True;',\
+  'splitBy': 'sentences'
+},\
+{ 'flag':'--f05', \
+  'generator': CONLLFeatGenerator(), \
+  'help': 'The feature generator with settings: split_by=clauses;',\
+  'splitBy': 'clauses'
+},\
 ]
 
 def add_feature_generator_arguments_to_argparser( argparser ):
@@ -256,7 +263,201 @@ def get_feature_generator( args, verbose=False ):
     gen = feature_generators[generator_id]
     if verbose:
         print(' Using feature generator: '+str(gen['flag'])+' "'+str(gen['help'])+'"' )
-    return gen['generator']
+    return gen['generator'], gen['splitBy']
+
+# =============================================================================
+# =============================================================================
+#  Converting data from estnltk JSON to CONLL
+# =============================================================================
+# =============================================================================
+
+def _create_clause_based_dep_links( orig_text, layer=LAYER_CONLL ):
+    '''  Rewrites dependency links in the text from sentence-based linking to clause-
+        based linking: 
+          *) words which have their parent outside-the-clause will become root 
+             nodes (will obtain link value -1), and 
+          *) words which have their parent inside-the-clause will have parent index
+             according to word indices inside the clause;
+         
+    '''
+    sent_start_index = 0
+    for sent_text in orig_text.split_by( SENTENCES ):
+        # 1) Create a mapping: from sentence-based dependency links to clause-based dependency links
+        mapping = dict()
+        cl_ind  = sent_text.clause_indices
+        for wid, word in enumerate(sent_text[WORDS]):
+            firstSyntaxRel = sent_text[layer][wid][PARSER_OUT][0]
+            parentIndex    = firstSyntaxRel[1]
+            if parentIndex != -1:
+                if cl_ind[parentIndex] != cl_ind[wid]:
+                    # Parent of the word is outside the current clause: make root 
+                    # node from the current node 
+                    mapping[wid] = -1
+                else:
+                    # Find the beginning of the clause 
+                    clause_start = cl_ind.index( cl_ind[wid] )
+                    # Find the index of parent label in the clause
+                    j = 0
+                    k = 0
+                    while clause_start + j < len(cl_ind):
+                        if clause_start + j == parentIndex:
+                            break
+                        if cl_ind[clause_start + j] == cl_ind[wid]:
+                            k += 1
+                        j += 1
+                    assert clause_start + j < len(cl_ind), '(!) Parent index not found for: '+str(parentIndex)
+                    mapping[wid] = k
+            else:
+                mapping[wid] = -1
+        # 2) Overwrite old links with new ones
+        for local_wid in mapping.keys():
+            global_wid = sent_start_index + local_wid
+            for syntax_rel in orig_text[layer][global_wid][PARSER_OUT]:
+                syntax_rel[1] = mapping[local_wid]
+        # 3) Advance the index for processing the next sentence
+        sent_start_index += len(cl_ind)
+    return orig_text
+
+
+def __sort_analyses(sentence):
+    ''' Sorts analysis of all the words in the sentence. 
+        This is required for consistency, because by default, analyses are 
+        listed in arbitrary order; '''
+    for word in sentence:
+        if ANALYSIS not in word:
+            raise Exception( '(!) Error: no analysis found from word: '+str(word) )
+        else:
+            word[ANALYSIS] = sorted(word[ANALYSIS], \
+                key=lambda x : "_".join( [x[ROOT],x[POSTAG],x[FORM],x[CLITIC]] ))
+    return sentence
+
+
+def convert_text_to_CONLL( text, feature_generator, granularity=SENTENCES ):
+    ''' Converts given estnltk Text object into CONLL format and returns as a 
+        string.
+        Uses given *feature_generator* to produce fields ID, FORM, LEMMA, CPOSTAG, 
+        POSTAG, FEATS for each token.
+        Fields to predict (HEAD, DEPREL) will be left empty.
+        This method is used in preparing parsing & testing data for MaltParser.
+        
+        Parameters
+        -----------
+        text : estnltk.text.Text
+            Morphologically analysed text from which the CONLL file is generated;
+            
+        feature_generator : CONLLFeatGenerator
+            An instance of CONLLFeatGenerator, which has method *generate_features()* 
+            for generating morphological features for a single token;
+        
+        granularity : str
+            The smallest chunk of text to be analysed independently: a sentence or 
+            a clause.
+            Possible values: 'sentences', 'clauses'
+            Default: 'sentences'
+        
+        The aimed format looks something like this:
+        1	Öö	öö	S	S	sg|nom	_	xxx	_	_
+        2	oli	ole	V	V	indic|impf|ps3|sg	_	xxx	_	_
+        3	täiesti	täiesti	D	D	_	_	xxx	_	_
+        4	tuuletu	tuuletu	A	A	sg|nom	_	xxx	_	_
+        5	.	.	Z	Z	Fst	_	xxx	_	_
+    '''
+    from estnltk.text import Text
+    if not isinstance( text, Text ):
+        raise Exception('(!) Unexpected type of input argument! Expected EstNLTK\'s Text. ')
+    assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
+    sentenceStrs = []
+    for sentence_text in text.split_by( granularity ):
+        sentence_text[WORDS] = __sort_analyses( sentence_text[WORDS] )
+        for i in range(len( sentence_text[WORDS] )):
+            # Generate features  ID, FORM, LEMMA, CPOSTAG, POSTAG, FEATS
+            strForm = feature_generator.generate_features( sentence_text, i )
+            # *** HEAD  (syntactic parent)
+            strForm.append( '_' )
+            strForm.append( '\t' )
+            # *** DEPREL  (label of the syntactic relation)
+            strForm.append( 'xxx' )
+            strForm.append( '\t' )
+            # *** PHEAD
+            strForm.append( '_' )
+            strForm.append( '\t' )
+            # *** PDEPREL
+            strForm.append( '_' )
+            sentenceStrs.append( ''.join( strForm ) )
+        sentenceStrs.append( '' )
+    return '\n'.join( sentenceStrs )
+
+
+def convert_text_w_syntax_to_CONLL( text, feature_generator, granularity=SENTENCES, layer=LAYER_CONLL ):
+    ''' Converts given estnltk Text object into CONLL format and returns as a 
+        string.
+        Uses given *feature_generator* to produce fields ID, FORM, LEMMA, CPOSTAG, 
+        POSTAG, FEATS for each token.
+        Fills fields to predict (HEAD, DEPREL) with the syntactic information from
+        given *layer* (default: LAYER_CONLL).
+        This method is used in preparing training data for MaltParser.
+        
+        Parameters
+        -----------
+        text : estnltk.text.Text
+            Morphologically analysed text from which the CONLL file is generated;
+            
+        feature_generator : CONLLFeatGenerator
+            An instance of CONLLFeatGenerator, which has method *generate_features()* 
+            for generating morphological features for a single token;
+        
+        granularity : str
+            The smallest chunk of text to be analysed independently: a sentence or 
+            a clause.
+            Possible values: 'sentences', 'clauses'
+            Default: 'sentences'
+        
+        layer : str
+            Name of the *text* layer from which syntactic information is to be taken.
+            Defaults to LAYER_CONLL.
+        
+        The aimed format looks something like this:
+        1	Öö	öö	S	S	sg|n	2	@SUBJ	_	_
+        2	oli	ole	V	V	s	0	ROOT	_	_
+        3	täiesti	täiesti	D	D	_	4	@ADVL	_	_
+        4	tuuletu	tuuletu	A	A	sg|n	2	@PRD	_	_
+        5	.	.	Z	Z	_	4	xxx	_	_
+    '''
+    from estnltk.text import Text
+    if not isinstance( text, Text ):
+        raise Exception('(!) Unexpected type of input argument! Expected EstNLTK\'s Text. ')
+    assert layer in text, ' (!) The layer "'+layer+'" is missing form the Text object.'
+    assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
+    sentenceStrs = []
+    if granularity == CLAUSES:
+        _create_clause_based_dep_links( text, layer )
+    for sentence_text in text.split_by( granularity ):
+        sentence_text[WORDS] = __sort_analyses( sentence_text[WORDS] )
+        for i in range(len( sentence_text[WORDS] )):
+            # Generate features  ID, FORM, LEMMA, CPOSTAG, POSTAG, FEATS
+            strForm = feature_generator.generate_features( sentence_text, i )
+            # Get syntactic analysis of the token
+            syntaxToken    = sentence_text[layer][i]
+            firstSyntaxRel = syntaxToken[PARSER_OUT][0]
+            # *** HEAD  (syntactic parent)
+            parentLabel = str( firstSyntaxRel[1] + 1 )
+            strForm.append( parentLabel )
+            strForm.append( '\t' )
+            # *** DEPREL  (label of the syntactic relation)
+            if parentLabel == '0':
+                strForm.append( 'ROOT' )
+                strForm.append( '\t' )
+            else:
+                strForm.append( firstSyntaxRel[0] )
+                strForm.append( '\t' )
+            # *** PHEAD
+            strForm.append( '_' )
+            strForm.append( '\t' )
+            # *** PDEPREL
+            strForm.append( '_' )
+            sentenceStrs.append( ''.join( strForm ) )
+        sentenceStrs.append( '' )
+    return '\n'.join( sentenceStrs )
 
 
 # =============================================================================
