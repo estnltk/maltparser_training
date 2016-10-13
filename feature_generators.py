@@ -248,6 +248,11 @@ feature_generators = [
   'help': 'The feature generator with settings: split_by=clauses;',\
   'splitBy': 'clauses'
 },\
+{ 'flag':'--f06', \
+  'generator': CONLLFeatGenerator(addAmbiguousPos=True), \
+  'help': 'The feature generator with settings: split_by=clauses, addAmbiguousPos=True;',\
+  'splitBy': 'clauses'
+},\
 ]
 
 def add_feature_generator_arguments_to_argparser( argparser ):
@@ -458,6 +463,170 @@ def convert_text_w_syntax_to_CONLL( text, feature_generator, granularity=SENTENC
             sentenceStrs.append( ''.join( strForm ) )
         sentenceStrs.append( '' )
     return '\n'.join( sentenceStrs )
+
+
+# =============================================================================
+# =============================================================================
+#  Converting data from CONLL to estnltk JSON
+# =============================================================================
+# =============================================================================
+
+def align_CONLL_with_Text( lines, text, granularity=SENTENCES, **kwargs ):
+    ''' Aligns CONLL format syntactic analysis (a list of strings) with given EstNLTK's Text 
+        object.
+        Basically, for each word position in the Text object, finds corresponding line(s) in
+        the CONLL format output;
+        Returns a list of dicts, where each dict has following attributes:
+          'start'   -- start index of the word in Text;
+          'end'     -- end index of the word in Text;
+          'sent_id' -- index of the sentence in Text, starting from 0;
+          'parser_out' -- list of analyses from the output of the syntactic parser;
+        Parameters
+        -----------
+        lines : list of str
+            The input text for the pipeline; Should be the CONLL format syntactic analysis;
+        text : Text
+            EstNLTK Text object containing the original text that was analysed with
+            MaltParser;
+        granularity : str
+            The smallest chunk of text that was analysed independently: a sentence or 
+            a clause.
+            Possible values: 'sentences', 'clauses'
+            Default: 'sentences'
+            
+        check_tokens : bool
+            Optional argument specifying whether tokens should be checked for match 
+            during the alignment. In case of a mismatch, an exception is raised.
+            Default:False
+            
+        add_word_ids : bool
+            Optional argument specifying whether each alignment should include attributes:
+            * 'text_word_id' - current word index in the whole Text, starting from 0;
+            * 'sent_word_id' - index of the current word in the sentence, starting from 0;
+            Default:False
+        
+    ''' 
+    from estnltk.text import Text
+    if not isinstance( text, Text ):
+        raise Exception('(!) Unexpected type of input argument! Expected EstNLTK\'s Text. ')
+    if not isinstance( lines, list ):
+        raise Exception('(!) Unexpected type of input argument! Expected a list of strings.')
+    assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
+    check_tokens = False
+    add_word_ids = False
+    for argName, argVal in kwargs.items() :
+        if argName in ['check_tokens', 'check'] and argVal in [True, False]:
+           check_tokens = argVal
+        if argName in ['add_word_ids', 'word_ids'] and argVal in [True, False]:
+           add_word_ids = argVal
+    generalWID = 0
+    sentenceID = 0
+    # Iterate over the sentences and perform the alignment
+    results = []
+    j = 0
+    for sentence_text in text.split_by( SENTENCES ):
+        # 1) Collect the corresponding sentence from the CONLL output
+        tokens_to_collect = len(sentence_text[WORDS])
+        tokens_collected  = 0
+        chunks      = [[]]
+        while j < len(lines):
+            maltparserToken = lines[j]
+            if len( maltparserToken ) > 1 and '\t' in maltparserToken:
+                # extend the existing clause chunk
+                token_dict = { 't':maltparserToken, \
+                               'w':(maltparserToken.split('\t'))[1] }
+                chunks[-1].append( token_dict )
+                tokens_collected += 1
+            else:
+                # create a new clause chunk
+                if len(chunks[-1]) != 0:
+                    chunks.append( [] )
+            j += 1
+            if tokens_to_collect == tokens_collected:
+                break
+        if tokens_to_collect != tokens_collected:  # a sanity check 
+            raise Exception('(!) Unable to collect the sentence "'+str(sentence_text.text)+\
+                            '" from the output of MaltParser.')
+        # 2) Put the sentence back together
+        if granularity == SENTENCES:
+            # A. The easy case: sentence-wise splitting was used
+            for wid, estnltkToken in enumerate(sentence_text[WORDS]):
+                maltparserToken = chunks[0][wid]['t']
+                if check_tokens and estnltkToken[TEXT] != chunks[0][wid]['w']:
+                    raise Exception("(!) A misalignment between Text and CONLL: ",\
+                                    estnltkToken, maltparserToken )
+                # Populate the alignment
+                result_dict = { START:estnltkToken[START], END:estnltkToken[END], \
+                                SENT_ID:sentenceID, PARSER_OUT: [maltparserToken] }
+                if add_word_ids:
+                    result_dict['text_word_id'] = generalWID # word id in the text
+                    result_dict['sent_word_id'] = wid        # word id in the sentence
+                results.append( result_dict )
+                generalWID += 1
+        elif granularity == CLAUSES:
+            # B. The tricky case: clause-wise splitting was used
+            results_by_wid = {}
+            # B.1  Try to find the location of each chunk in the original text
+            cl_ind = sentence_text.clause_indices
+            for chunk_id, chunk in enumerate(chunks):
+                firstWord = chunk[0]['w']
+                chunkLen  = len(chunk)
+                estnltk_token_ids = []
+                seen_clause_ids   = {}
+                for wid, estnltkToken in enumerate(sentence_text[WORDS]):
+                    # Try to recollect tokens of the clause starting from location wid
+                    if estnltkToken[TEXT] == firstWord and \
+                       wid+chunkLen <= len(sentence_text[WORDS]) and cl_ind[wid] not in seen_clause_ids:
+                        clause_index = cl_ind[wid]
+                        i = wid
+                        while i < len(sentence_text[WORDS]):
+                            if cl_ind[i] == clause_index:
+                                estnltk_token_ids.append( i )
+                            i += 1
+                    # Remember that we have already seen this clause 
+                    # (in order to avoid start collecting from the middle of the clause)
+                    seen_clause_ids[cl_ind[wid]] = 1
+                    if len(estnltk_token_ids) == chunkLen:
+                        break
+                    else:
+                        estnltk_token_ids = []
+                if len(estnltk_token_ids) == chunkLen:
+                    # Align the CONLL clause with the clause from the original estnltk Text
+                    for wid, estnltk_wid in enumerate(estnltk_token_ids):
+                        estnltkToken    = sentence_text[WORDS][estnltk_wid]
+                        maltparserToken = chunk[wid]['t']
+                        if check_tokens and estnltkToken[TEXT] != chunk[wid]['w']:
+                            raise Exception("(!) A misalignment between Text and CONLL: ",\
+                                                 estnltkToken, maltparserToken )
+                        # Convert indices: from clause indices to sentence indices
+                        tokenFields = maltparserToken.split('\t')
+                        if tokenFields[6] != '0':
+                            in_clause_index = int(tokenFields[6])-1
+                            assert in_clause_index in range(0, len(estnltk_token_ids)), \
+                                   '(!) Unexpected clause index from CONLL: '+str(in_clause_index)+\
+                                   ' \ '+str(len(estnltk_token_ids))
+                            in_sent_index   = estnltk_token_ids[in_clause_index]+1
+                            tokenFields[6]  = str(in_sent_index)
+                        tokenFields[0] = str(estnltk_wid+1)
+                        maltparserToken = '\t'.join(tokenFields)
+                        # Populate the alignment
+                        result_dict = { START:estnltkToken[START], END:estnltkToken[END], \
+                                        SENT_ID:sentenceID, PARSER_OUT: [maltparserToken] }
+                        results_by_wid[estnltk_wid] = result_dict
+                else:
+                    raise Exception('(!) Unable to locate the clause in the original input: '+str(chunk))
+            if len(results_by_wid.keys()) != len(sentence_text[WORDS]):
+                raise Exception('(!) Error in aligning Text and CONLL - token counts not matching:'+\
+                                str(len(results_by_wid.keys()))+ ' vs '+str(len(sentence_text[WORDS])) )
+            # B.2  Put the sentence back together
+            for wid in sorted(results_by_wid.keys()):
+                if add_word_ids:
+                    results_by_wid[wid]['text_word_id'] = generalWID # word id in the text
+                    results_by_wid[wid]['sent_word_id'] = wid        # word id in the sentence
+                results.append( results_by_wid[wid] )
+                generalWID += 1
+        sentenceID += 1
+    return results
 
 
 # =============================================================================
