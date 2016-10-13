@@ -40,6 +40,8 @@ class CONLLFeatGenerator(object):
     vcFeatures      = None
     clbFeatures     = None
     sayingverbs     = None
+    
+    parseScope      = None
 
     def __init__( self, **kwargs):
        ''' Initializes CONLLFeatGenerator with the configuration given in
@@ -85,7 +87,16 @@ class CONLLFeatGenerator(object):
                 ending saying verbs, and label 'se_saying_verb' is added to FEATS 
                 part of each such verb.
                 Default: False
+           parseScope : str
+                The smallest chunk of text to be parsed independently: a sentence 
+                or a clause. If this parameter is set to 'clauses', then the input
+                text is parsed clause-by-clause (instead of sentence-by-sentence
+                parsing), and the results of the clause-wise parsing are clued back
+                to sentence afterwards;
+                Possible values: 'sentences', 'clauses'
+                Default: 'sentences'
        '''
+       self.parseScope = SENTENCES
        # ** Parse keyword arguments
        for argName, argVal in kwargs.items():
             if argName in ['addAmbiguousPos']:
@@ -98,6 +109,8 @@ class CONLLFeatGenerator(object):
                 self.addClauseBound = bool(argVal)
             elif argName in ['addSeSayingVerbs']:
                 self.addSeSayingVerbs = bool(argVal)
+            elif argName in ['parseScope']:
+                self.parseScope = argVal
             elif argName in ['addKSubCatRels', 'kSubCatRels']:
                 if os.path.isfile(argVal):
                     # Load K subcategorization lexicon from file
@@ -225,33 +238,27 @@ class CONLLFeatGenerator(object):
 feature_generators = [
 { 'flag':'--f01',  \
   'generator': MaltParser.load_default_feature_generator(), \
-  'help': 'EstNLTK\'s feature generator (Default).',\
-  'splitBy': 'sentences'
+  'help': 'EstNLTK\'s feature generator (Default).'
 },\
 { 'flag':'--f02', \
-  'generator': CONLLFeatGenerator(), \
-  'help': 'The feature generator with settings: split_by=sentences;',\
-  'splitBy': 'sentences'
+  'generator': CONLLFeatGenerator(parseScope='sentences'), \
+  'help': 'The feature generator with settings: parseScope=sentences;'
 },\
 { 'flag':'--f03', \
-  'generator': CONLLFeatGenerator(addAmbiguousPos=True,addVerbcGramm=True), \
-  'help': 'The feature generator with settings: split_by=sentences, addAmbiguousPos=True, addVerbcGramm=True;',\
-  'splitBy': 'sentences'
+  'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True), \
+  'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True, addVerbcGramm=True;',
 },\
 { 'flag':'--f04', \
-  'generator': CONLLFeatGenerator(addAmbiguousPos=True,addVerbcGramm=True,addNomAdvVinf=True,addClauseBound=True,addSeSayingVerbs=True), \
-  'help': 'The feature generator with settings: split_by=sentences, addAmbiguousPos=True, addVerbcGramm=True, addNomAdvVinf=True, addClauseBound=True, addSeSayingVerbs=True;',\
-  'splitBy': 'sentences'
+  'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True,addNomAdvVinf=True,addClauseBound=True,addSeSayingVerbs=True), \
+  'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True, addVerbcGramm=True, addNomAdvVinf=True, addClauseBound=True, addSeSayingVerbs=True;'
 },\
 { 'flag':'--f05', \
-  'generator': CONLLFeatGenerator(), \
-  'help': 'The feature generator with settings: split_by=clauses;',\
-  'splitBy': 'clauses'
+  'generator': CONLLFeatGenerator(parseScope='clauses'), \
+  'help': 'The feature generator with settings: parseScope=clauses;'
 },\
 { 'flag':'--f06', \
-  'generator': CONLLFeatGenerator(addAmbiguousPos=True), \
-  'help': 'The feature generator with settings: split_by=clauses, addAmbiguousPos=True;',\
-  'splitBy': 'clauses'
+  'generator': CONLLFeatGenerator(parseScope='clauses',addAmbiguousPos=True), \
+  'help': 'The feature generator with settings: parseScope=clauses, addAmbiguousPos=True;'
 },\
 ]
 
@@ -268,7 +275,7 @@ def get_feature_generator( args, verbose=False ):
     gen = feature_generators[generator_id]
     if verbose:
         print(' Using feature generator: '+str(gen['flag'])+' "'+str(gen['help'])+'"' )
-    return gen['generator'], gen['splitBy']
+    return gen['generator']
 
 # =============================================================================
 # =============================================================================
@@ -337,7 +344,7 @@ def __sort_analyses(sentence):
     return sentence
 
 
-def convert_text_to_CONLL( text, feature_generator, granularity=SENTENCES ):
+def convert_text_to_CONLL( text, feature_generator ):
     ''' Converts given estnltk Text object into CONLL format and returns as a 
         string.
         Uses given *feature_generator* to produce fields ID, FORM, LEMMA, CPOSTAG, 
@@ -354,12 +361,6 @@ def convert_text_to_CONLL( text, feature_generator, granularity=SENTENCES ):
             An instance of CONLLFeatGenerator, which has method *generate_features()* 
             for generating morphological features for a single token;
         
-        granularity : str
-            The smallest chunk of text to be analysed independently: a sentence or 
-            a clause.
-            Possible values: 'sentences', 'clauses'
-            Default: 'sentences'
-        
         The aimed format looks something like this:
         1	Öö	öö	S	S	sg|nom	_	xxx	_	_
         2	oli	ole	V	V	indic|impf|ps3|sg	_	xxx	_	_
@@ -370,6 +371,10 @@ def convert_text_to_CONLL( text, feature_generator, granularity=SENTENCES ):
     from estnltk.text import Text
     if not isinstance( text, Text ):
         raise Exception('(!) Unexpected type of input argument! Expected EstNLTK\'s Text. ')
+    try:
+        granularity = feature_generator.parseScope
+    except AttributeError:
+        granularity = SENTENCES
     assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
     sentenceStrs = []
     for sentence_text in text.split_by( granularity ):
@@ -393,7 +398,7 @@ def convert_text_to_CONLL( text, feature_generator, granularity=SENTENCES ):
     return '\n'.join( sentenceStrs )
 
 
-def convert_text_w_syntax_to_CONLL( text, feature_generator, granularity=SENTENCES, layer=LAYER_CONLL ):
+def convert_text_w_syntax_to_CONLL( text, feature_generator, layer=LAYER_CONLL ):
     ''' Converts given estnltk Text object into CONLL format and returns as a 
         string.
         Uses given *feature_generator* to produce fields ID, FORM, LEMMA, CPOSTAG, 
@@ -411,12 +416,6 @@ def convert_text_w_syntax_to_CONLL( text, feature_generator, granularity=SENTENC
             An instance of CONLLFeatGenerator, which has method *generate_features()* 
             for generating morphological features for a single token;
         
-        granularity : str
-            The smallest chunk of text to be analysed independently: a sentence or 
-            a clause.
-            Possible values: 'sentences', 'clauses'
-            Default: 'sentences'
-        
         layer : str
             Name of the *text* layer from which syntactic information is to be taken.
             Defaults to LAYER_CONLL.
@@ -432,6 +431,10 @@ def convert_text_w_syntax_to_CONLL( text, feature_generator, granularity=SENTENC
     if not isinstance( text, Text ):
         raise Exception('(!) Unexpected type of input argument! Expected EstNLTK\'s Text. ')
     assert layer in text, ' (!) The layer "'+layer+'" is missing form the Text object.'
+    try:
+        granularity = feature_generator.parseScope
+    except AttributeError:
+        granularity = SENTENCES
     assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
     sentenceStrs = []
     if granularity == CLAUSES:
@@ -471,7 +474,7 @@ def convert_text_w_syntax_to_CONLL( text, feature_generator, granularity=SENTENC
 # =============================================================================
 # =============================================================================
 
-def align_CONLL_with_Text( lines, text, granularity=SENTENCES, **kwargs ):
+def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
     ''' Aligns CONLL format syntactic analysis (a list of strings) with given EstNLTK's Text 
         object.
         Basically, for each word position in the Text object, finds corresponding line(s) in
@@ -488,12 +491,10 @@ def align_CONLL_with_Text( lines, text, granularity=SENTENCES, **kwargs ):
         text : Text
             EstNLTK Text object containing the original text that was analysed with
             MaltParser;
-        granularity : str
-            The smallest chunk of text that was analysed independently: a sentence or 
-            a clause.
-            Possible values: 'sentences', 'clauses'
-            Default: 'sentences'
-            
+        feature_generator : CONLLFeatGenerator
+            The instance of CONLLFeatGenerator, which was used for generating the input of 
+            the MaltParser;
+        
         check_tokens : bool
             Optional argument specifying whether tokens should be checked for match 
             during the alignment. In case of a mismatch, an exception is raised.
@@ -511,6 +512,10 @@ def align_CONLL_with_Text( lines, text, granularity=SENTENCES, **kwargs ):
         raise Exception('(!) Unexpected type of input argument! Expected EstNLTK\'s Text. ')
     if not isinstance( lines, list ):
         raise Exception('(!) Unexpected type of input argument! Expected a list of strings.')
+    try:
+        granularity = feature_generator.parseScope
+    except AttributeError:
+        granularity = SENTENCES
     assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
     check_tokens = False
     add_word_ids = False
