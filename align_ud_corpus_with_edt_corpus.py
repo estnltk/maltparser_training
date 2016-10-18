@@ -112,6 +112,10 @@ aligned_tokens     = 0
 missing_sentences  = 0
 missing_tokens     = 0
 mismatch_sentences = 0
+try:
+    granularity = feat_generator.parseScope
+except AttributeError:
+    granularity = SENTENCES
 if args.in_file and os.path.isfile(args.in_file) and args.in_dir and os.path.isdir(args.in_dir):
     start_time = timer()
     args_given = True
@@ -185,7 +189,11 @@ if args.in_file and os.path.isfile(args.in_file) and args.in_dir and os.path.isd
                 o_f.write('\n')
                 o_f.close()
                 # Remember that the sentence was successfully written to file 
-                written_sent_ids.append( ud_sent[0] )
+                if granularity == SENTENCES:
+                    written_sent_ids.append( ud_sent[0] )
+                elif granularity == CLAUSES:
+                    for cid, cl_text in enumerate(edt_sent_text.split_by( granularity )):
+                        written_sent_ids.append( ud_sent[0]+'_clause_'+str(cid) )
 
     if log_sent_ids and written_sent_ids:
         # Log sent ids

@@ -125,6 +125,10 @@ missing_sentences  = 0
 missing_tokens     = 0
 mismatch_sentences = 0
 args_given = False
+try:
+    granularity = feat_generator.parseScope
+except AttributeError:
+    granularity = SENTENCES
 if os.path.isdir( args.in_dir ) and in_files:
     # *** Process
     start_time = timer()
@@ -235,7 +239,11 @@ if os.path.isdir( args.in_dir ) and in_files:
                     o_f.close()
                     # Remember that the sentence was successfully written to file 
                     uncommon_tokens += len(edt_sent_text.words)
-                    written_sent_ids.append( '#'+edt_in_file+'__'+str(id) )
+                    if granularity == SENTENCES:
+                        written_sent_ids.append( ud_sent[0] )
+                    elif granularity == CLAUSES:
+                        for cid, cl_text in enumerate(edt_sent_text.split_by( granularity )):
+                            written_sent_ids.append( ud_sent[0]+'_clause_'+str(cid) )
                 else: 
                     common_sents_checkup += 1
     print()
