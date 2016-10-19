@@ -22,11 +22,13 @@ def fetchResults( outputFile ):
 #    Fetch command line arguments
 # =============================================================================
 malt_parser_jar   = 'maltparser-1.8.jar'
+train_corpus      = os.path.join('UD_Estonian-master', 'et-ud-train.cg3-conll')
 test_corpus       = os.path.join('UD_Estonian-master', 'et-ud-test.cg3-conll')
 test_empty_corpus = None
 model_name        = 'estnltkECG'
 java_loc          = 'java'
 heap_size         = 'Xmx5048M'
+eval_on_train     = False
 
 final_options_file = None
 feature_model_file = None
@@ -55,6 +57,11 @@ arg_parser.add_argument("-g", "--test",  default=test_corpus, \
 arg_parser.add_argument("-te", "--test_empty",  default=test_empty_corpus, \
                                          help="evaluation corpus (CONLL file) without syntactic annotations (default: '"+str(test_empty_corpus)+"');", \
                                          metavar='<test_empty_corpus>')
+arg_parser.add_argument('-et', '--eval_on_train', action='store_true',\
+                                         help="if set, then the model is also evaluated on the training set (to compare training and test errors);",)
+arg_parser.add_argument("-i", "--train", default=train_corpus, \
+                                         help="training corpus CONLL file (default: '"+train_corpus+"');", \
+                                         metavar='<train_corpus>')
 args = arg_parser.parse_args()
 malt_parser_jar = args.maltparser_jar
 if not args.maltparser_jar or not os.path.isfile(args.maltparser_jar):
@@ -65,18 +72,36 @@ if not args.test and not os.path.isfile(args.test):
 test_empty_corpus = args.test_empty
 if args.test_empty and not os.path.isfile(args.test_empty):
     raise Exception('Test corpus not found: '+args.test_empty)
+eval_on_train = bool( args.eval_on_train )
+train_corpus  = args.train
+if eval_on_train and (not args.train or not os.path.isfile(args.train)):
+   raise Exception('Train corpus not found: '+args.train)
 heap_size = args.heap
 if not heap_size.startswith('-'):
    heap_size = '-'+heap_size
-model_name = args.name
+model_name    = args.name
+
 
 model_name_opt  = '-c '+model_name
-eval_out_file   = 'debug.output.txt'
+eval_out_file_1 = 'debug.test.output.txt'
+eval_out_file_2 = 'debug.train.output.txt'
 
 if os.path.exists(model_name+'.mco'):
     # =============================================================================
     #    Evaluate MaltParser
     # =============================================================================
+    if eval_on_train:
+        print(' Parsing training corpus:')
+        test_out_corpus = train_corpus+'.parsed'
+        in_corpus = train_corpus
+        command = java_loc + ' -jar '+malt_parser_jar+' '+model_name_opt+' -i '+in_corpus+' -o '+test_out_corpus+' -m parse '
+        print ("  Executing:  "+command)
+        os.system(command)
+        
+        command = java_loc + ' -jar MaltEval.jar -s '+test_out_corpus+' -g '+train_corpus+' --Metric LAS;UAS;LA > '+eval_out_file_2
+        print ("  Executing:  "+command)
+        os.system(command)
+    
     print(' Parsing test corpus:')
     test_out_corpus = test_corpus+'.parsed'
     in_corpus = test_empty_corpus if test_empty_corpus else test_corpus
@@ -84,14 +109,18 @@ if os.path.exists(model_name+'.mco'):
     print ("  Executing:  "+command)
     os.system(command)
     
-    command = java_loc + ' -jar MaltEval.jar -s '+test_out_corpus+' -g '+test_corpus+' --Metric LAS;UAS;LA > '+eval_out_file
+    command = java_loc + ' -jar MaltEval.jar -s '+test_out_corpus+' -g '+test_corpus+' --Metric LAS;UAS;LA > '+eval_out_file_1
     print ("  Executing:  "+command)
     os.system(command)
-    resultLines = fetchResults( eval_out_file )
+    
+    print()
+    if eval_on_train:
+        resultLines = fetchResults( eval_out_file_2 )
+        print('  *** Evaluation on training corpus: ')
+        print( '\n'.join( resultLines ) )    
+    resultLines = fetchResults( eval_out_file_1 )
+    print('  *** Evaluation on test corpus: ')
     print( '\n'.join( resultLines ) )
 else:
     print(' (!) Unable to find the model file: '+model_name+'.mco')
-
-
-
 

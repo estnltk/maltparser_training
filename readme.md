@@ -102,7 +102,7 @@ Notes:
  
  * If the validation script detects some cycles, you should fix these in order to get through the automatic optimization process (otherwise, some of the algorithms may fail with an error). A temporary soultion employed here is to add the logic of fixing to the script `adhoc_fixes.py`, so it will be automatically re-applied each time the dataset is generated; 
 
- * You may have to increase the Java memory heap size, e.g. by adding flags `-Xmx2048M` or `-Xmx5048M` to the java command;
+ * You may have to increase the Java memory heap size, e.g. by adding flags `-Xmx2048M` or `-Xmx5048M` to the java command (it is advisable to use 64bit Java VM; when using 32bit VM, consider the [possible limitations of setting maximum heap size](http://www.oracle.com/technetwork/java/hotspotfaq-138619.html#gc_heap_32bit));
 
 After the final optimization step (`-p 3`), the MaltOptimizer [produces](http://nil.fdi.ucm.es/maltoptimizer/userguide.html) a *final configuration file* (`finalOptionsFile.xml`) and a file containing suggested options (`phase3_optFile.txt`), which also contains option `feature_model (-F)`, pointing to *the feature model XML file*. These two file names will also be passed as parameters in training of the MaltParser.
 
