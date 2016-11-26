@@ -59,7 +59,7 @@ Preparing the *evaluation data*:
 
 Notes:
 
-  * The alignment will not be obtain 100% coverage, as "The Estonian UD treebank" contains sentences (the Arborest sentences) that are not part of the "Estonian Dependency Treebank". However, the number of missing sentences is relatively small:  in terms of token counts, the resulting `.cg3-conll` files are only approx. 4% smaller than the original `.conllu` files.
+  * The alignment will not obtain 100% coverage, as "The Estonian UD treebank" contains sentences (the Arborest sentences) that are not part of the "Estonian Dependency Treebank". However, the number of missing sentences is relatively small:  in terms of token counts, the resulting `.cg3-conll` files are only approx. 4% smaller than the original `.conllu` files.
   
   * "Estonian Dependency Treebank" currently available at github also misses one newspaper article file: `aja_EPL_2006_12_16.tasak.inforem`; This file is available from an internal repository, please contact the authors to obtain it.
 
@@ -102,7 +102,7 @@ Notes:
  
  * If the validation script detects some cycles, you should fix these in order to get through the automatic optimization process (otherwise, some of the algorithms may fail with an error). A temporary soultion employed here is to add the logic of fixing to the script `adhoc_fixes.py`, so it will be automatically re-applied each time the dataset is generated; 
 
- * You may have to increase the Java memory heap size, e.g. by adding flags `-Xmx2048M` or `-Xmx5048M` to the java command (it is advisable to use 64bit Java VM; when using 32bit VM, consider the [possible limitations of setting maximum heap size](http://www.oracle.com/technetwork/java/hotspotfaq-138619.html#gc_heap_32bit));
+ * You may have to increase the Java memory heap size, e.g. by adding flags `-Xmx2048M` or `-Xmx5048M` to the java command (it is advisable to use a 64bit Java VM; when using a 32bit VM, consider the [possible limitations of setting maximum heap size](http://www.oracle.com/technetwork/java/hotspotfaq-138619.html#gc_heap_32bit));
 
 After the final optimization step (`-p 3`), the MaltOptimizer [produces](http://nil.fdi.ucm.es/maltoptimizer/userguide.html) a *final configuration file* (`finalOptionsFile.xml`) and a file containing suggested options (`phase3_optFile.txt`), which also contains option `feature_model (-F)`, pointing to *the feature model XML file*. These two file names will also be passed as parameters in training of the MaltParser.
 
@@ -118,7 +118,11 @@ The script `train_and_test_maltparser.py` trains a MaltParser model on *training
  * `--F <finalOptionsFile>` -- *final configuration file* (`finalOptionsFile.xml`) with path (Default: `None`);
  * `--f <feature_model_file>` --  *feature model XML file* with path (Default: `None`);
 
-The script needs to be executed in a directory that contains `MaltEval.jar`, and also `maltparser-1.8.jar`, alternatively, MaltParser Jar file can be specified via command line argument `--m`.
+The script needs to be executed in a directory that contains `MaltEval.jar`, and also `maltparser-1.8.jar`, alternatively, MaltParser Jar file can be specified via command line argument `--m`. 
+
+Note:
+
+* For executing JAR files, the script uses a Java VM accessible from the command line. Again, it is advisable [to use a 64bit JVM instead of a 32bit JVM](http://www.oracle.com/technetwork/java/hotspotfaq-138619.html#gc_heap_32bit).
  
 Example: training MaltParser on the training set with the final configuration from `maltoptimizer-1.0.3\malt-opt-results-1-w-cv\finalOptionsFile.xml`, feature model from file `maltoptimizer-1.0.3\malt-opt-results-1-w-cv\addInputFEATS0.xml`, naming the model to `estnltkECG-1` and evaluating it on the test set:
 
