@@ -54,7 +54,7 @@ class CONLLFeatGenerator(object):
                 their POSTAG field (fine-grained POS tag) filled with a
                 contatenation of all ambiguous POS tags; If False, POSTAG field
                 is the same as CPOSTAG;
-                Default: True
+                Default: False
            addKSubCatRels : string
                 If used, the argument value should contain a location of the
                 _K_ subcategorization relations file -- a file that can be loaded
@@ -240,9 +240,13 @@ feature_generators = [
   'generator': MaltParser.load_default_feature_generator(), \
   'help': 'EstNLTK\'s feature generator (Default).'
 },\
-{ 'flag':'--f02', \
+{ 'flag':'--f02_a', \
   'generator': CONLLFeatGenerator(parseScope='sentences'), \
   'help': 'The feature generator with settings: parseScope=sentences;'
+},\
+{ 'flag':'--f02_b', \
+  'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True), \
+  'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True;'
 },\
 { 'flag':'--f03', \
   'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True), \

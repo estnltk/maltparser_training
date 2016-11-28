@@ -21,7 +21,7 @@ def fetchResults( outputFile ):
 # =============================================================================
 #    Fetch command line arguments
 # =============================================================================
-malt_parser_jar   = 'maltparser-1.8.jar'
+malt_parser_jar   = 'maltparser-1.9.0.jar'
 train_corpus      = os.path.join('UD_Estonian-master', 'et-ud-train.cg3-conll')
 test_corpus       = os.path.join('UD_Estonian-master', 'et-ud-test.cg3-conll')
 test_empty_corpus = None

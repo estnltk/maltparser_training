@@ -10,7 +10,7 @@ Prerequisites
 
 Download and unpack the following Java based tools:
 
-   * MaltParser (ver 1.8): <http://www.maltparser.org/download.html>
+   * MaltParser (ver 1.9.0): <http://www.maltparser.org/download.html>
    * MaltOptimizer (ver 1.0.3): <http://nil.fdi.ucm.es/maltoptimizer/download.html>
    * MaltEval: <http://www.maltparser.org/malteval.html>
 
@@ -19,11 +19,13 @@ Download and unpack the following annotated corpora:
    * "The Estonian UD treebank": <https://github.com/UniversalDependencies/UD_Estonian>
    * "Estonian Dependency Treebank": <https://github.com/EstSyntax/EDT>
 
-Download and install EstNLTK (ver 1.4+) with Python 3.4.x:
+Download and install EstNLTK (ver 1.4+ or later) with Python 3.4.x:
 
    * Most scripts in this repository have been developed and tested with Python 3.4.x (so compatibility with version 2.7.x is not guaranteed);
-   * In order to use these scripts, you need to install the latest development version of EstNLTK that includes the improved syntactic parsing interface.
-   For that, clone the repository, checkout the development commit [cebee219231ac8b404e3a5fb99aded802e32954f](https://github.com/estnltk/estnltk/tree/cebee219231ac8b404e3a5fb99aded802e32954f) (or any following commit under the version 1.4), and install the development version of EstNLTK;
+   * In order to use these scripts, you need to install the version of EstNLTK that includes the improved syntactic parsing interface:
+      * Install the version 1.4.1 or any later version;
+      * Alternatively, you can use a development version 1.4.0+ in a following way: clone the repository, checkout the development commit [cebee219231ac8b404e3a5fb99aded802e32954f](https://github.com/estnltk/estnltk/tree/cebee219231ac8b404e3a5fb99aded802e32954f) (or any following commit under the version 1.4.0), and install the development version of EstNLTK;
+       
 
 <!-- TODO: it should point to a stable version, if finally available -->
 
@@ -90,11 +92,11 @@ The variable named `feature_generators` (in `feature_generators.py`) lists the a
 
 Optimization uses `MaltOptimizer.jar` and `et-ud-dev.cg3-conll` dataset for finding the best parsing/learning algorithm and the feature model. Once the  *development data set* has been prepared (and is located in a subdir `UD_Estonian-master`), execute the following commands in a row:
 
-    java -jar MaltOptimizer.jar -p 1 -m maltparser-1.8.jar -c UD_Estonian-master\et-ud-dev.cg3-conll
+    java -jar MaltOptimizer.jar -p 1 -m maltparser-1.9.0.jar -c UD_Estonian-master\et-ud-dev.cg3-conll
 
-    java -jar MaltOptimizer.jar -p 2 -m maltparser-1.8.jar -c UD_Estonian-master\et-ud-dev.cg3-conll
+    java -jar MaltOptimizer.jar -p 2 -m maltparser-1.9.0.jar -c UD_Estonian-master\et-ud-dev.cg3-conll
 
-    java -jar MaltOptimizer.jar -p 3 -m maltparser-1.8.jar -c UD_Estonian-master\et-ud-dev.cg3-conll
+    java -jar MaltOptimizer.jar -p 3 -m maltparser-1.9.0.jar -c UD_Estonian-master\et-ud-dev.cg3-conll
 
 Notes:
 
@@ -104,21 +106,21 @@ Notes:
 
  * You may have to increase the Java memory heap size, e.g. by adding flags `-Xmx2048M` or `-Xmx5048M` to the java command (it is advisable to use a 64bit Java VM; when using a 32bit VM, consider the [possible limitations of setting maximum heap size](http://www.oracle.com/technetwork/java/hotspotfaq-138619.html#gc_heap_32bit));
 
-After the final optimization step (`-p 3`), the MaltOptimizer [produces](http://nil.fdi.ucm.es/maltoptimizer/userguide.html) a *final configuration file* (`finalOptionsFile.xml`) and a file containing suggested options (`phase3_optFile.txt`), which also contains option `feature_model (-F)`, pointing to *the feature model XML file*. These two file names will also be passed as parameters in training of the MaltParser.
+After the final optimization step (`-p 3`), the MaltOptimizer [produces](http://nil.fdi.ucm.es/maltoptimizer/userguide.html) a *final configuration file* (`finalOptionsFile.xml`) and a file containing suggested options (`phase3_optFile.txt`), which also contains option `feature_model (-F)`, pointing to *the feature model XML file*. These two file names are to be passed as parameters in the next phase: training of MaltParser.
 
 ### Training & evaluation (combined)
 
 The script `train_and_test_maltparser.py` trains a MaltParser model on *training data set*, and after the training, evaluates it on *test data set*, and reports the accuracy. Command line flags can be used to specify details of the process:
 
  * `--n <model_name>` -- specifies name of the model (Default: `estnltkECG`);
- * `--m <maltparser_jar>`-- specifies MaltParser's jar file to be used in training/evaluation (Default: `maltparser-1.8.jar`);
+ * `--m <maltparser_jar>`-- specifies MaltParser's jar file to be used in training/evaluation (Default: `maltparser-1.9.0.jar`);
  *  `--j <java_heap_size>`-- Java heap size argument used in executing Java commands (Default: `-Xmx5048M`);
  * `--in <train_corpus>` -- Training corpus CONLL file (Default: `UD_Estonian-master\et-ud-train.cg3-conll`);
  * `--g <test_corpus>` -- Test corpus CONLL file (Default: `UD_Estonian-master\et-ud-test.cg3-conll`);
  * `--F <finalOptionsFile>` -- *final configuration file* (`finalOptionsFile.xml`) with path (Default: `None`);
  * `--f <feature_model_file>` --  *feature model XML file* with path (Default: `None`);
 
-The script needs to be executed in a directory that contains `MaltEval.jar`, and also `maltparser-1.8.jar`, alternatively, MaltParser Jar file can be specified via command line argument `--m`. 
+The script needs to be executed in a directory that contains `MaltEval.jar`, and also `maltparser-1.9.0.jar`, alternatively, MaltParser Jar file can be specified via command line argument `--m`. 
 
 Note:
 
