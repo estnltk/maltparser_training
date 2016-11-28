@@ -488,6 +488,7 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
           'end'     -- end index of the word in Text;
           'sent_id' -- index of the sentence in Text, starting from 0;
           'parser_out' -- list of analyses from the output of the syntactic parser;
+
         Parameters
         -----------
         lines : list of str
@@ -497,7 +498,8 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
             MaltParser;
         feature_generator : CONLLFeatGenerator
             The instance of CONLLFeatGenerator, which was used for generating the input of 
-            the MaltParser;
+            the MaltParser; If None, assumes a default feature-generator with the scope set
+            to 'sentences';
         
         check_tokens : bool
             Optional argument specifying whether tokens should be checked for match 
@@ -518,7 +520,7 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
         raise Exception('(!) Unexpected type of input argument! Expected a list of strings.')
     try:
         granularity = feature_generator.parseScope
-    except AttributeError:
+    except (AttributeError, NameError):
         granularity = SENTENCES
     assert granularity in [SENTENCES, CLAUSES], '(!) Unsupported granularity: "'+str(granularity)+'"!'
     check_tokens = False
@@ -530,12 +532,22 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
            add_word_ids = argVal
     generalWID = 0
     sentenceID = 0
+    # Collect clause indices for each sentence (if required)
+    clause_indices = None
+    if granularity == CLAUSES:
+        c = 0
+        all_clause_indices = text.clause_indices
+        clause_indices = []
+        for sentence_words in text.divide( layer=WORDS, by=SENTENCES ):
+            clause_indices.append([])
+            for wid, estnltkToken in enumerate( sentence_words ):
+                clause_indices[-1].append( all_clause_indices[c] )
+                c += 1
     # Iterate over the sentences and perform the alignment
     results = []
     j = 0
-    for sentence_text in text.split_by( SENTENCES ):
-        # 1) Collect the corresponding sentence from the CONLL output
-        tokens_to_collect = len(sentence_text[WORDS])
+    for sentence_words in text.divide( layer=WORDS, by=SENTENCES ):
+        tokens_to_collect = len( sentence_words )
         tokens_collected  = 0
         chunks      = [[]]
         while j < len(lines):
@@ -554,12 +566,12 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
             if tokens_to_collect == tokens_collected:
                 break
         if tokens_to_collect != tokens_collected:  # a sanity check 
-            raise Exception('(!) Unable to collect the sentence "'+str(sentence_text.text)+\
-                            '" from the output of MaltParser.')
+            raise Exception('(!) Unable to collect the following sentence from the output of MaltParser: "'+\
+                                 str(sentence_words)+'"')
         # 2) Put the sentence back together
         if granularity == SENTENCES:
             # A. The easy case: sentence-wise splitting was used
-            for wid, estnltkToken in enumerate(sentence_text[WORDS]):
+            for wid, estnltkToken in enumerate( sentence_words ):
                 maltparserToken = chunks[0][wid]['t']
                 if check_tokens and estnltkToken[TEXT] != chunks[0][wid]['w']:
                     raise Exception("(!) A misalignment between Text and CONLL: ",\
@@ -576,19 +588,19 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
             # B. The tricky case: clause-wise splitting was used
             results_by_wid = {}
             # B.1  Try to find the location of each chunk in the original text
-            cl_ind = sentence_text.clause_indices
+            cl_ind = clause_indices[sentenceID]
             for chunk_id, chunk in enumerate(chunks):
                 firstWord = chunk[0]['w']
                 chunkLen  = len(chunk)
                 estnltk_token_ids = []
                 seen_clause_ids   = {}
-                for wid, estnltkToken in enumerate(sentence_text[WORDS]):
+                for wid, estnltkToken in enumerate( sentence_words ):
                     # Try to recollect tokens of the clause starting from location wid
                     if estnltkToken[TEXT] == firstWord and \
-                       wid+chunkLen <= len(sentence_text[WORDS]) and cl_ind[wid] not in seen_clause_ids:
+                       wid+chunkLen <= len(sentence_words) and cl_ind[wid] not in seen_clause_ids:
                         clause_index = cl_ind[wid]
                         i = wid
-                        while i < len(sentence_text[WORDS]):
+                        while i < len(sentence_words):
                             if cl_ind[i] == clause_index:
                                 estnltk_token_ids.append( i )
                             i += 1
@@ -602,7 +614,7 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
                 if len(estnltk_token_ids) == chunkLen:
                     # Align the CONLL clause with the clause from the original estnltk Text
                     for wid, estnltk_wid in enumerate(estnltk_token_ids):
-                        estnltkToken    = sentence_text[WORDS][estnltk_wid]
+                        estnltkToken    = sentence_words[estnltk_wid]
                         maltparserToken = chunk[wid]['t']
                         if check_tokens and estnltkToken[TEXT] != chunk[wid]['w']:
                             raise Exception("(!) A misalignment between Text and CONLL: ",\
@@ -624,9 +636,9 @@ def align_CONLL_with_Text( lines, text, feature_generator, **kwargs ):
                         results_by_wid[estnltk_wid] = result_dict
                 else:
                     raise Exception('(!) Unable to locate the clause in the original input: '+str(chunk))
-            if len(results_by_wid.keys()) != len(sentence_text[WORDS]):
+            if len(results_by_wid.keys()) != len(sentence_words):
                 raise Exception('(!) Error in aligning Text and CONLL - token counts not matching:'+\
-                                str(len(results_by_wid.keys()))+ ' vs '+str(len(sentence_text[WORDS])) )
+                                str(len(results_by_wid.keys()))+ ' vs '+str(len(sentence_words)) )
             # B.2  Put the sentence back together
             for wid in sorted(results_by_wid.keys()):
                 if add_word_ids:
