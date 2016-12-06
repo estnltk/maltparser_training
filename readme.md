@@ -16,15 +16,15 @@ Download and unpack the following Java based tools:
 
 Download and unpack the following annotated corpora:
 
-   * "The Estonian UD treebank": <https://github.com/UniversalDependencies/UD_Estonian>
-   * "Estonian Dependency Treebank": <https://github.com/EstSyntax/EDT>
+   * "The Estonian UD treebank": <https://github.com/UniversalDependencies/UD_Estonian> (ver [31f5c1c](https://github.com/UniversalDependencies/UD_Estonian/tree/31f5c1cac1d7561d24c01eb46e447d760f3afc0d));
+   * "Estonian Dependency Treebank": <https://github.com/EstSyntax/EDT> (ver [51361a0](https://github.com/EstSyntax/EDT/tree/51361a0e60579c867a113030dab4e6ebc3df2720));
 
 Download and install EstNLTK (ver 1.4+ or later) with Python 3.4.x:
 
    * Most scripts in this repository have been developed and tested with Python 3.4.x (so compatibility with version 2.7.x is not guaranteed);
    * In order to use these scripts, you need to install the version of EstNLTK that includes the improved syntactic parsing interface:
       * Install the version 1.4.1 (or later);
-      * Alternatively, you can use a development version 1.4.0+ in a following way: clone the repository, checkout the development commit [cebee219231ac8b404e3a5fb99aded802e32954f](https://github.com/estnltk/estnltk/tree/cebee219231ac8b404e3a5fb99aded802e32954f) (or any following commit under the version 1.4.0), and install the development version of EstNLTK;
+      * Alternatively, you can use a development version 1.4.0+ in a following way: clone the repository, checkout the development commit [cebee21923](https://github.com/estnltk/estnltk/tree/cebee219231ac8b404e3a5fb99aded802e32954f) (or any following commit under the version 1.4.0), and install the development version of EstNLTK;
        
 
 <!-- TODO: it should point to a stable version, if finally available -->
