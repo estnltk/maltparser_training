@@ -248,9 +248,17 @@ feature_generators = [
   'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True), \
   'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True;'
 },\
-{ 'flag':'--f03', \
+{ 'flag':'--f03_a', \
   'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True), \
   'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True, addVerbcGramm=True;',
+},\
+{ 'flag':'--f03_b', \
+  'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True,addNomAdvVinf=True), \
+  'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True, addVerbcGramm=True, addNomAdvVinf=True;',
+},\
+{ 'flag':'--f03_c', \
+  'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True,addNomAdvVinf=True, addClauseBound=True), \
+  'help': 'The feature generator with settings: parseScope=sentences, addAmbiguousPos=True, addVerbcGramm=True, addNomAdvVinf=True, addClauseBound=True;',
 },\
 { 'flag':'--f04', \
   'generator': CONLLFeatGenerator(parseScope='sentences',addAmbiguousPos=True,addVerbcGramm=True,addNomAdvVinf=True,addClauseBound=True,addSeSayingVerbs=True), \
