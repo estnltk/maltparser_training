@@ -35,6 +35,7 @@ vislcg3_cmd       = 'vislcg3'
 test_corpus       = 'UD_Estonian-master\\et-ud-test.cg3-conll'
 test_empty_corpus = None
 force_disamb      = False
+replace_root      = True
 pipeline          = SYNTAX_PIPELINE_1_4
 #pipeline          = SYNTAX_PIPELINE_ESTCG
 
@@ -59,7 +60,8 @@ arg_parser.add_argument("-v", "--vislcg",  default=vislcg3_cmd, \
                                            metavar='<vislcg3_cmd>')
 arg_parser.add_argument("-d", "--disamb",  dest='force_disamb', action='store_true', \
                                            help="whether statistical morphological disambiguation should be performed (default: "+str(force_disamb)+");" )
-arg_parser.set_defaults(force_disamb=force_disamb)
+arg_parser.add_argument('--no-replace-root', help="do not replace syntactic label of the root node with ROOT; (by default, the replacement will be made)", dest='replace_root', action='store_false')
+arg_parser.set_defaults(force_disamb=force_disamb, replace_root=replace_root)
 args = arg_parser.parse_args()
 test_corpus = args.test
 if not args.test and not os.path.isfile(args.test):
@@ -69,6 +71,7 @@ if args.test_empty and not os.path.isfile(args.test_empty):
     raise Exception('Test corpus not found: '+args.test_empty)
 vislcg3_cmd  = args.vislcg
 force_disamb = args.force_disamb
+replace_root = args.replace_root
 
 test_out_corpus = test_corpus+'.vislcg3-parsed'
 in_corpus = test_empty_corpus if test_empty_corpus else test_corpus
@@ -76,10 +79,13 @@ print(' Contents from CONLL output: ', in_corpus, end=' ')
 text = read_text_from_conll_file( in_corpus, keep_old=False )
 allTokens = len(text[WORDS])
 sentStart = len(text.sentence_texts)
-print('    (words: ',allTokens,' sentences: ',sentStart, ')',end='\n')
+print('    ( words: ',allTokens,' sentences: ',sentStart, ')',end='\n')
 if force_disamb:
     print(' Using EstNLTK disambiguation ...',end='\n')
     text = text.tag_analysis()
+if not replace_root:
+    print(' Not using ROOT labels.')
+
 print()
 del text[LAYER_CONLL]
 
@@ -89,7 +95,10 @@ parser.parse_text( text )
 
 print(' Converting parsing results to CONLL ... ')
 # Convert given text into CONLL string
-conll_str = convert_text_w_syntax_to_CONLL( text, CONLLFeatGenerator(), layer=LAYER_VISLCG3 )
+try:
+    conll_str = convert_text_w_syntax_to_CONLL( text, CONLLFeatGenerator(), layer=LAYER_VISLCG3, replace_root=replace_root )
+except TypeError:
+    conll_str = convert_text_w_syntax_to_CONLL( text, CONLLFeatGenerator(), layer=LAYER_VISLCG3 )
 
 # Write results into the file
 print('  --> ',test_out_corpus)

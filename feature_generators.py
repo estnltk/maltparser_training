@@ -287,6 +287,8 @@ def get_feature_generator( args, verbose=False ):
     gen = feature_generators[generator_id]
     if verbose:
         print(' Using feature generator: '+str(gen['flag'])+' "'+str(gen['help'])+'"' )
+        if 'replace_root' in args_as_dict and not args_as_dict['replace_root']:
+            print(' Not using ROOT labels.')
     return gen['generator']
 
 # =============================================================================
