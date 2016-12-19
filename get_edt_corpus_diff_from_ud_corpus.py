@@ -113,11 +113,14 @@ arg_parser.add_argument("-o", "--out_file", default=OUT_FILE_NAME, \
                                         help="the name part for the output files (defaults to name: '"+OUT_FILE_NAME+"');",  
                                         metavar='<out_file_name>')
 add_feature_generator_arguments_to_argparser( arg_parser )
+arg_parser.add_argument('--no-replace-root', help="do not replace syntactic label of the root node with ROOT; (useful for generating test data for VislCG3 parser which does not use the ROOT label);", dest='replace_root', action='store_false')
+arg_parser.set_defaults( replace_root=True )
 # *** Collect input arguments 
 args = arg_parser.parse_args()
 in_files = [ f for f in args.in_files if os.path.isfile(f) and re.match('.+(\.conllu?)$', f) ]
 OUT_FILE_NAME = args.out_file
 feat_generator = get_feature_generator( args, verbose=True )
+replace_root = args.replace_root
 
 aligned_sentences  = 0
 aligned_tokens     = 0
@@ -231,7 +234,10 @@ if os.path.isdir( args.in_dir ) and in_files:
                     edt_sent_text.tag_analysis()
                     ud_sent = [ '', edt_sent_text.word_texts ]
                     repair_cycles( edt_sent_text, ud_sent, layer=LAYER_VISLCG3 )
-                    conll_str = convert_text_w_syntax_to_CONLL( edt_sent_text, feat_generator, layer=LAYER_VISLCG3 )
+                    try:
+                        conll_str = convert_text_w_syntax_to_CONLL( edt_sent_text, feat_generator, layer=LAYER_VISLCG3, replace_root=replace_root )
+                    except TypeError:
+                        conll_str = convert_text_w_syntax_to_CONLL( edt_sent_text, feat_generator, layer=LAYER_VISLCG3 )
                     # Write results into the file
                     o_f = codecs.open( out_file_name, mode='a', encoding='utf-8' )
                     o_f.write(conll_str)

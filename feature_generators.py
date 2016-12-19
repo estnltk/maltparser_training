@@ -282,7 +282,7 @@ def add_feature_generator_arguments_to_argparser( argparser ):
 def get_feature_generator( args, verbose=False ):
     args_as_dict = vars( args )
     generator_id = 0
-    if 'generator_id' in args_as_dict:
+    if 'generator_id' in args_as_dict and not args_as_dict['generator_id'] == None:
         generator_id = args_as_dict['generator_id']
     gen = feature_generators[generator_id]
     if verbose:
